@@ -12,24 +12,37 @@ export default function App() {
     selectedDevice,
     setSelectedDevice,
     isConnecting,
+    isConnected,
+    buttonLabel,
     scanDevices,
     connectToDevice,
+    disconnectDevice,
   } = useBluetooth(addLog);
+
+  const handleButtonClick = () => {
+    if (isConnected) {
+      disconnectDevice();
+    } else {
+      connectToDevice();
+    }
+  };
 
   return (
     <div className="app-container">
       <Select
         label="Bluetoothデバイス"
         value={selectedDevice}
-        onChange={(e) => setSelectedDevice(e.target.value)}
+        onChange={(e) => setSelectedDevice(e
+
+.target.value)}
         onClick={scanDevices}
         options={devices}
         placeholder="デバイスを選択"
       />
       <TextArea label="ログ" value={logs} readOnly />
       <Button
-        label={isConnecting ? '接続中...' : '接続'}
-        onClick={connectToDevice}
+        label={isConnecting ? '接続中...' : buttonLabel}
+        onClick={handleButtonClick}
         disabled={isConnecting}
       />
     </div>
