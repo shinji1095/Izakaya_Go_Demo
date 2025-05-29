@@ -148,6 +148,9 @@ export const useBluetooth = (addLog) => {
       const mp3Url = buttonState.getMp3Path();
       addLog(`pressCount=${buttonState.pressCount}`);
       const letter = mp3Url.replace('/mp3/', '').replace('.mp3', '');
+      if (letter === 'undefined'){
+        return;
+      }
       lettersRef.current = lettersRef.current + letter;
       addLog(`現在のletters=${lettersRef.current}`);
       speakText(lettersRef.current);
