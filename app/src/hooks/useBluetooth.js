@@ -74,6 +74,7 @@ export const useBluetooth = (addLog) => {
         acceptAllDevices: true,
         optionalServices: [bluetoothConfig.serviceUUID],
       });
+
       const server = await device.gatt.connect();
       const service = await server.getPrimaryService(bluetoothConfig.serviceUUID);
       const characteristic = await service.getCharacteristic(bluetoothConfig.characteristicUUID);
@@ -81,16 +82,19 @@ export const useBluetooth = (addLog) => {
       await characteristic.startNotifications();
       characteristic.addEventListener('characteristicvaluechanged', (event) => {
         const value = event.target.value;
-        const length = value.byteLength;
+        if (value.byteLength !== 2) {
+          addLog(`不正な通知データ長: ${value.byteLength}バイト`);
+          return;
+        }
 
-        for (let i = 0; i + 1 < length; i += 2) {
-          const buttonId = value.getUint8(i);     // ButtonID
-          const pressType = value.getUint8(i + 1); // PressType
+        const buttonId = value.getUint8(0);
+        const pressType = value.getUint8(1);
 
-          if (buttonId <= 16){
-            addLog(`受信: Button${buttonId + 1}, PressType=${pressType}`);
-            handleCommand(buttonId, pressType);
-          }
+        if (buttonId <= 16) {
+          addLog(`受信: Button${buttonId + 1}, PressType=${pressType}`);
+          handleCommand(buttonId, pressType);
+        } else {
+          addLog(`無効なButtonID: ${buttonId}`);
         }
       });
 
@@ -109,6 +113,7 @@ export const useBluetooth = (addLog) => {
   };
 
 
+
   const disconnectDevice = () => {
     if (serverRef.current) {
       serverRef.current.disconnect();
@@ -122,18 +127,32 @@ export const useBluetooth = (addLog) => {
     }
   };
 
-  const speakText = (text) => {
-    if (!text) {
-      addLog('読み上げる文字がありません');
-      return;
-    }
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'ja-JP';
-    utterance.rate = 1.0; // 読み上げ速度
-    utterance.volume = 1.0; // 音量
-    speechSynthesis.speak(utterance);
-    addLog(`TTS読み上げ: ${text}`);
-  };
+const speakText = (text) => {
+  if (!text) {
+    addLog('読み上げる文字がありません');
+    return;
+  }
+
+  const voices = speechSynthesis.getVoices();
+  const japaneseVoices = voices.filter(v => v.lang === 'ja-JP');
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'ja-JP';
+  utterance.rate = 1.0;
+  utterance.volume = 1.0;
+  utterance.pitch = 2.0;
+
+  if (japaneseVoices.length > 0) {
+    utterance.voice = japaneseVoices[0]; // または好みに応じてインデックスを変える
+    addLog(`使用する声: ${utterance.voice.name}`);
+  } else {
+    addLog('日本語の音声が見つかりません');
+  }
+
+  speechSynthesis.speak(utterance);
+  addLog(`TTS読み上げ: ${text}`);
+};
+
 
   const handleCommand = (buttonId, pressType) => {
     if (buttonId > 16) {
@@ -141,10 +160,19 @@ export const useBluetooth = (addLog) => {
       return;
     }
 
+    const prevButtonId = prevIdRef.current;
     if (buttonId === 10 && pressType ===  PressType.SinglePress){
-      const buttonState = buttonStates[prevIdRef.current];
+      const buttonState = buttonStates[prevButtonId];
+      addLog(`prevButtonIdRef=${prevButtonId}`);
+
+      if (prevButtonId === null){
+        return;
+      }
+      if (buttonState === undefined){
+        return;
+      }
+
       buttonState.decPressCount(); // TODO 理由が分からない...
-      addLog(`prevIdRef=${prevIdRef.current}`);
       const mp3Url = buttonState.getMp3Path();
       addLog(`pressCount=${buttonState.pressCount}`);
       const letter = mp3Url.replace('/mp3/', '').replace('.mp3', '');
@@ -158,10 +186,10 @@ export const useBluetooth = (addLog) => {
       return;
     }
 
-    if (prevIdRef.current !== buttonId) {
-      addLog(`Prev button ID=${prevIdRef.current}, buttonId=${buttonId}`);
-      if (prevIdRef.current !== null && prevIdRef.current < buttonStates.length) {
-        buttonStates[prevIdRef.current].resetPressCount();
+    if (prevButtonId !== buttonId) {
+      addLog(`Prev button ID=${prevButtonId}, buttonId=${buttonId}`);
+      if (prevButtonId !== null && prevButtonId < buttonStates.length) {
+        buttonStates[prevButtonId].resetPressCount();
       }
     }
     prevIdRef.current = buttonId;
@@ -170,17 +198,14 @@ export const useBluetooth = (addLog) => {
       if (pressType === PressType.DoublePress) {
         lettersRef.current = lettersRef.current.slice(0, -1);
         addLog(`文字削除: 現在のletters=${letters.slice(0, -1)}`);
-        return;
-      }
-      if (pressType === PressType.LongPress) {
         speakText(lettersRef.current);
         return;
       }
-    }
-
-    if (pressType !== PressType.SinglePress) {
-      addLog(`無視: Button${buttonId + 1}, PressType=${pressType}`);
-      return;
+      if (pressType === PressType.LongPress) {
+        speakText(`${lettersRef.current}　　　を検索します`);
+        lettersRef.current = '';
+        return;
+      }
     }
 
     // Button1からButton10のSinglePress処理

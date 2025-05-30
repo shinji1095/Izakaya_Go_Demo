@@ -64,7 +64,7 @@ export class ButtonStateBluePrint {
     this.pressCount -= 1;
   }
 
-  getMp3Path() {
+  getLetter(){
     let letter;
     switch (this.state) {
       // TODO: 濁音，半濁音，小文字は未実装
@@ -84,6 +84,11 @@ export class ButtonStateBluePrint {
         console.error('Invalid state');
         return '';
     }
+    return letter;
+  }
+
+  getMp3Path() {
+    let letter = this.getLetter();
     return `/mp3/${letter}.mp3`;
   }
 }
